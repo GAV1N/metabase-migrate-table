@@ -13,18 +13,21 @@ class Table:
     old_id: int = 0
     new_schema: str = ""
     new_table: str = ""
-    new_id: int = 0
-    old_fields: str = ""
+    old_fields: Dict[str, str] = field(default_factory=dict)
     new_fields: str = ""
     collect_all: bool = False
+    db_id: int = field(init=False)
     card_ids: List[int] = field(init=False)
     dashboard_ids: List[int] = field(init=False)
 
     def __post_init__(self):
         self.old_schema, self.old_table = self.old.split(".")
         self.new_schema, self.new_table = self.new.split(".")
-        self.old_id = get_id(self.old)
-        self.new_id = get_id(self.new)
+
+    def set_database(self, db_id: int):
+        self.db_id = db_id
+        self.old_id = get_id(self.old, db_id)
+        self.new_id = get_id(self.new, db_id)
         self.old_fields = _get_table_fields(self.old_id)
         self.new_fields = _get_table_fields(self.new_id)
 
@@ -106,13 +109,19 @@ def _get_tables():
 
 def _get_table_fields(table_id):
     query_endpoint = f"table/{table_id}/query_metadata"
+    print(f"query_endpoint: {query_endpoint}")
     fields = {
         field["name"]: field["id"]
         for field in call_metabase_api(query_endpoint)["fields"]
     }
     return fields
 
-
-def get_id(table):
+def get_id(table, db_id):
     table_list = _get_tables()
-    return [x["id"] for x in table_list if f"{x['schema']}.{x['name']}" == table][0]
+    return [
+        x
+        for x
+        in table_list
+        if f"{x['schema']}.{x['name']}" == table
+        and x['db_id'] == db_id
+    ][0]['id']

@@ -1,10 +1,12 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from common import (
     call_metabase_api,
     get_field_name,
     get_source_table,
     modify_field_values,
+    modify_table_values,
 )
 from table import Table
 
@@ -12,7 +14,8 @@ from table import Table
 @dataclass
 class Card:
     id: int
-    data: str = None
+    data: Optional[dict] = None
+    db: Optional[int] = None
 
     def _get_question(self):
         query_endpoint = f"card/{self.id}"
@@ -20,6 +23,7 @@ class Card:
 
     def __post_init__(self):
         self.data = self.data or self._get_question()
+        self.db = self.data["dataset_query"]["database"]
 
     def save(self):
         query_endpoint = f"card/{self.id}"
@@ -37,16 +41,26 @@ class Card:
             # c.save()
 
         if self.data["query_type"] == "query":
-            if get_source_table(self.data["dataset_query"]["query"]) != table.old_id:
-                return False
+            table.set_database(self.db)
+            # print(f"table.old_id: {table.old_id}")
+            # print(f"table.new_id: {table.new_id}")
+            if get_source_table(self.data["dataset_query"]["query"]) == table.old_id:
+                self.data["dataset_query"]["query"].get(
+                    "source-query", self.data["dataset_query"]["query"]
+                )["source-table"] = table.new_id
 
-            self.data["dataset_query"]["query"].get(
-                "source-query", self.data["dataset_query"]["query"]
-            )["source-table"] = table.new_id
+            self.data["dataset_query"]["query"] = modify_table_values(
+                self.data["dataset_query"]["query"],
+                table,
+            )
+            print(modify_table_values(
+                self.data["dataset_query"]["query"],
+                table,
+            ))
 
             self.data["dataset_query"]["query"] = modify_field_values(
                 self.data["dataset_query"]["query"],
-                table,
+                table
             )
             return True
         return False
@@ -58,6 +72,7 @@ class Card:
         """
 
         variables = self.data["dataset_query"]["native"]["template-tags"]
+        table.set_database(self.db)
 
         for _, tag in variables.items():
             # Not all template-tags are variables, so we need to skip some of them

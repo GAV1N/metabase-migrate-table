@@ -1,7 +1,8 @@
+import os
 import requests
 
-METABASE_API_KEY = "REPLACE_ME"
-BASE_URL = "https://my_metabase_instance_url/api"
+METABASE_API_KEY = os.getenv("METABASE_API_KEY", "REPLACE_ME")
+BASE_URL = os.getenv("BASE_URL", "https://my_metabase_instance_url/api")
 headers = {
     "Content-Type": "application/json",
     "x-api-key": METABASE_API_KEY,
@@ -55,9 +56,23 @@ def modify_field_values(data, table):
         else:
             # Otherwise, recursively check each element of the list
             for i in range(len(data)):
-                modify_field_values(data[i], table)
+                data[i] = modify_field_values(data[i], table)
     elif isinstance(data, dict):
         # If it's a dictionary, iterate over its values
         for key in data:
-            modify_field_values(data[key], table)
+            data[key] = modify_field_values(data[key], table)
+    return data
+
+def modify_table_values(data, table):
+    if isinstance(data, list):
+        for i in range(len(data)):
+            data[i] = modify_table_values(data[i], table)
+    elif isinstance(data, dict):
+        for key in data:
+            if key == "source-table" and data[key] == table.old_id:
+                print(f"{key}: {table.old_id} --> {table.new_id}")
+                data[key] = table.new_id
+            else:
+                data[key] = modify_table_values(data[key], table)
+
     return data
